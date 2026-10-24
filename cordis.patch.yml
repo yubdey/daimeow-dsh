@@ -1,0 +1,6 @@
+- insert:
+    - id: daimeow-dsh
+      name: 'daimeow-dsh'
+      config:
+        autoReactions: true
+        desktop: true

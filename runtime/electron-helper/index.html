@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DaiMeow</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    user-select: none;
+    font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+  #root {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+  }
+  #pet {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    touch-action: none;
+    cursor: grab;
+    pointer-events: auto;
+  }
+  #pet:active { cursor: grabbing; }
+  #petStage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  #petCanvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none;
+  }
+  #petStage .prop {
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    width: 0;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    pointer-events: none;
+    -webkit-user-drag: none;
+    transition: opacity 180ms ease;
+  }
+  #petStage .prop.show { opacity: 1; }
+  #speech-bubble {
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.94);
+    color: #17202d;
+    padding: calc(9px * var(--bubble-k, 1)) calc(14px * var(--bubble-k, 1));
+    border: 1px solid rgba(28, 40, 55, 0.1);
+    border-radius: calc(18px * var(--bubble-k, 1));
+    font: 500 calc(13px * var(--bubble-k, 1)) / 1.45 "Microsoft YaHei", sans-serif;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 180ms ease;
+    box-shadow: 0 10px 28px rgba(18, 30, 45, 0.16);
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 240px;
+  }
+  #speech-bubble.show { opacity: 1; }
+  #menu {
+    position: fixed;
+    z-index: 99;
+    width: 180px;
+    max-height: min(620px, calc(100vh - 12px));
+    overflow: auto;
+    display: none;
+    padding: 6px;
+    border: 1px solid rgba(15, 23, 42, 0.14);
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.2);
+    color: #0f172a;
+    font-size: 12px;
+  }
+  #menu.open { display: block; }
+  #menu .dm-menu-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+  }
+  #menu .dm-menu-row:hover { background: #eef2f7; }
+  #menu .dm-menu-check {
+    flex: 0 0 16px;
+    width: 16px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1;
+    color: #3b82f6;
+  }
+  #menu .dm-menu-caret {
+    margin-left: auto;
+    padding-left: 8px;
+    font-size: 10px;
+    line-height: 1;
+    opacity: 0.65;
+  }
+  #menu .dm-menu-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 0 4px 7px;
+  }
+  #menu .dm-menu-action {
+    min-width: 0;
+    padding: 6px 3px;
+    border: 0;
+    border-radius: 7px;
+    background: #f8fafc;
+    color: #334155;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #menu .dm-menu-action:hover { background: #eef2f7; color: #0f172a; }
+  #menu .dm-menu-adjust { padding: 2px 8px 8px; }
+  #menu .dm-menu-sub-label {
+    padding: 6px 0 4px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  #menu .dm-menu-sub-label.gap { padding-top: 10px; }
+  #menu .dm-scale-options { display: flex; gap: 4px; }
+  #menu .dm-scale-option {
+    flex: 1;
+    padding: 5px 2px;
+    border: 1px solid rgba(127, 127, 127, 0.3);
+    border-radius: 7px;
+    background: #f8fafc;
+    color: #334155;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  #menu .dm-scale-option[aria-checked="true"] {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+  }
+  #menu .dm-opacity-row { display: flex; align-items: center; gap: 8px; }
+  #menu .dm-opacity-row input[type="range"] { flex: 1; accent-color: #3b82f6; }
+  #menu .dm-opacity-value {
+    width: 38px;
+    text-align: right;
+    color: #64748b;
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+  }
+  #menu .dm-separator {
+    height: 1px;
+    margin: 4px 5px;
+    background: rgba(15, 23, 42, 0.12);
+  }
+</style>
+</head>
+<body>
+  <div id="root">
+    <div id="pet">
+      <div id="petStage">
+        <canvas id="petCanvas" aria-label="DaiMeow Live2D pet"></canvas>
+        <div id="speech-bubble" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+  <div id="menu" role="menu"></div>
+  <script src="assets.js"></script>
+  <script src="runtime.js"></script>
+  <script src="pet-renderer.js"></script>
+</body>
+</html>

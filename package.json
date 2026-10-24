@@ -1,0 +1,42 @@
+{
+  "name": "daimeow-dsh",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DaiMeow Live2D desktop pet for DeepSeek Harness",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.png",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "runtime/electron-helper",
+    "locale/*.json",
+    "icon.png",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build-client.mjs && node scripts/build-helper.mjs",
+    "check": "node --check index.js && node --check client.js && node --check runtime/electron-helper/main.js && node --check runtime/electron-helper/preload.js && node --check runtime/electron-helper/pet-renderer.js"
+  },
+  "license": "MIT"
+}
