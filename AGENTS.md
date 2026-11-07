@@ -8,7 +8,7 @@
 
 当前形态：**桌面全屏模式是唯一模式**。
 
-- DSH 页面内不再渲染窗口桌宠（`src/client.template.js` 中 `WEB_UI = false`）。
+- DSH 页面客户端只保留一个轻量“显示呆喵”启动器，不再内嵌模型或 Live2D 运行时。
 - 插件 Host 在启用时自动拉起一个**独立的 Electron helper**，创建一个覆盖主屏的透明、无边框、置顶、默认点击穿透的窗口，在里面跑 Live2D 呆喵。
 - DSH 页面只保留一个右下角“🐾 显示呆喵”胶囊（桌面窗口被隐藏时出现）。
 
@@ -17,15 +17,17 @@
 ```
 DaiMeow DSH/
 ├─ index.js                     # Host（Cordis 插件，跑在 DSH Host 子 Node 进程）
-├─ src/client.template.js       # 客户端源码模板（构建输入）
-├─ client.js                    # 构建产物（不要手改）
-├─ scripts/build-client.mjs     # 生成 client.js（内嵌模型/道具/运行时）
+├─ src/client.template.js       # DSH 页面轻量启动器源码
+├─ client.js                    # 构建产物（由启动器模板复制生成，不要手改）
+├─ screen-reply.js              # 截图回复人格、25 字解析、payload 校验
+├─ test/screen-reply.test.js    # 截屏回复纯逻辑测试
+├─ scripts/build-client.mjs     # 生成轻量 client.js
 ├─ scripts/build-helper.mjs     # 生成 helper 的 assets.js / runtime.js
 ├─ runtime/
 │  ├─ live2dcubismcore.js       # Cubism Core（构建输入）
 │  ├─ pet-bundle.js             # 原 DaiMeow 打包运行时（构建输入）
 │  └─ electron-helper/          # 独立 Electron 桌面层
-│     ├─ main.js                # 全屏透明置顶窗口、托盘、IPC、stdin 帧、可见性上报
+│     ├─ main.js                # 全屏透明置顶窗口、托盘、IPC、控制服务器、截屏
 │     ├─ preload.js             # contextBridge: petWindow
 │     ├─ index.html             # 全屏透明页面 + 菜单样式
 │     ├─ pet-renderer.js        # 最小 petAPI、Live2D 启动、菜单/拖动/点击穿透
@@ -45,23 +47,29 @@ DaiMeow DSH/
 
 ### Host（`index.js`，跑在 DSH 的 Host 子进程）
 
-- `inject = ['tools', 'webServer']`。
-- `DaiMeowService`：向 SSE 客户端广播 `daimeow/reaction` 帧；`service.onFrame` 会把同样的帧写进桌面 helper 的 stdin（`dsh-pet-frame:{json}`）。
+- `inject = ['tools', 'webServer', 'llm', 'agentDefaultModel']`。
+- `DaiMeowService`：向 SSE 客户端广播 `daimeow/reaction` 帧；`service.onFrame` 通过 helper 上报的本机回环 HTTP 控制地址下发帧。
+- 左键截屏识图：helper 将 480×270 JPEG 写入 stdout；Host 存入 DSH 附件服务，用 `ctx.llm.stream()` 调当前多模态模型，再把动作和台词回传呆喵。人格固定为原 DaiMeow 的“元气随从喵”，台词硬截断到 25 字；模型支持时默认传 `reasoningEffort: off`，内置 5 秒冷却。
 - 路由：
   - `GET /daimeow/events`：SSE。
   - `POST /daimeow/detached/open`：spawn helper。
-  - `POST /daimeow/detached/close`：kill helper。
-  - `GET /daimeow/detached/status`：`{ ok, open, visible }`。
-  - `POST /daimeow/detached/show`：向 helper stdin 写 `{"action":"show"}`。
+  - `POST /daimeow/detached/close`：请求 helper 走与菜单/托盘相同的停用插件流程。
+  - `POST /daimeow/detached/disable-result`：浏览器侧通过 DSH Remote 停用插件后回报失败或未应用结果。
+  - `GET /daimeow/detached/status`：helper、可见性、控制通道、停用请求和截屏状态。
+  - `POST /daimeow/detached/show`：通过本机 HTTP 控制通道显示 helper。
+  - `POST /daimeow/detached/hide`：通过本机 HTTP 控制通道隐藏 helper，并等待可见性回报。
+  - `POST /daimeow/detached/recover-interaction`：关闭鼠标穿透并恢复置顶，等价于托盘“恢复交互”。
+  - `POST /daimeow/detached/diagnostics`：读取主进程命中检测状态。
+  - `POST /daimeow/detached/capture`：触发一次截屏识图（同样受 5 秒冷却）。
 - 配置：`autoReactions`（默认 true）、`reactionThrottleMs`（默认 1200）、`desktop`（默认 true，启用时自动拉起 helper）。
-- 工具：`pet_say`、`pet_control`、`pet_status`。
-- Electron 可执行文件解析顺序：`DSH_PET_ELECTRON_PATH` → `~/.dsh/electron/electron.exe`（由 dsh-pet 下载，当前 v43.3.0）。
+- 工具：`pet_say`、`pet_control`、`pet_status`；`pet_control` 额外支持 `capture_screen`。
+- Electron 可执行文件解析顺序：`DSH_PET_ELECTRON_PATH` → `~/.dsh/electron/electron.exe`（通常由 dsh-pet 下载）。
 
 ### 桌面 helper（`runtime/electron-helper/`）
 
-- `main.js`：全屏 workArea 透明置顶窗口，`focusable: false`（不抢焦点），默认 `setIgnoreMouseEvents(true, { forward: true })`，托盘（显示/隐藏/恢复交互/退出），读 stdin 帧转发给渲染端，窗口 show/hide 时向 stdout 写 `dsh-pet-visibility:true/false`。
+- `main.js`：全屏 workArea 透明置顶窗口，`focusable: true` 但用 `showInactive()` 显示，交互释放后立即 `blur()`；主进程按真实光标位置切换 `setIgnoreMouseEvents`，不再使用 `forward: true`。托盘（显示/隐藏/恢复交互/退出）、IPC、本机控制服务器和截屏服务都在这里。
 - 渲染端：`pet-renderer.js` 提供最小 `petAPI`，启动原 DaiMeow Live2D 运行时；光标进入呆喵/菜单范围才把窗口切成可交互，其余区域穿透；右键菜单（动作折叠、调整、固定/穿透/置顶、恢复默认、隐藏、关闭）。
-- 通信：Host ↔ helper 走 stdin/stdout；**不要**让 helper 直接请求 DSH WebServer（DSH 的浏览器访问闸门会对独立进程裸 HTTP 返回 403，dsh-pet 项目也遇到了同样问题）。
+- 通信：stdout 用于状态和截图上报；Host → helper 使用 stdout 公布的 `127.0.0.1` 随机令牌控制地址。**不要**让 helper 直接请求 DSH WebServer。
 
 ## 4. 构建与验证
 
@@ -84,9 +92,10 @@ node --check index.js
 # 或一次跑完
 npm run build
 npm run check
+npm test
 ```
 
-注意：`client.js`、`runtime/electron-helper/assets.js`、`runtime/electron-helper/runtime.js` 都是**生成文件**。改源码后重新构建，不要直接编辑它们。
+注意：`client.js`、`runtime/electron-helper/assets.js`、`runtime/electron-helper/runtime.js` 都是**生成文件**。改源码后重新构建，不要直接编辑它们。`client.js` 只包含启动器，模型和 Live2D 运行时只嵌入 helper。
 
 ## 5. 安装、重载与验证
 
@@ -118,12 +127,13 @@ npm run check
 
 已知/待确认：
 
-- “显示呆喵”按钮依赖 Host 新路由与 helper 可见性上报，**必须停用/启用插件 + 刷新页面**才生效；1.5s 轮询延迟。
+- “显示呆喵”入口依赖 helper 可见性上报；页面通常在一个 1.5 秒轮询周期内更新，重新聚焦或重新可见时会立即刷新。改动 Host/helper 后仍需停用/启用插件。
 - 仅覆盖主显示器；多屏未处理。
-- helper 崩溃后不会自动重启；需要重载插件。
+- helper 异常退出时会尝试同步停用插件，避免出现“程序已退出、插件仍开启”的状态；不会自动重启。
 - 依赖 dsh-pet 下载的 `~/.dsh/electron`；如果该目录不存在，需要设置 `DSH_PET_ELECTRON_PATH` 或补 `@electron/get` 自动下载。
 - 右键菜单打开后光标离开菜单/呆喵会自动收起（为了让全屏层恢复穿透、滚轮能操作其他程序）。
-- “关闭呆喵”只退出 helper，不改变插件启停状态。
+- 截图会发送给 DSH 当前选择的多模态模型；模型必须支持图片输入。
+- 截图会写入 DSH 附件服务，实际保留和回收策略由 DSH 附件存储决定。
 
 ## 8. 建议的第一步
 
@@ -131,7 +141,7 @@ npm run check
 
 1. 读 `README.md`、`index.js`、`src/client.template.js`、`scripts/build-client.mjs`、`scripts/build-helper.mjs`、`runtime/electron-helper/*`。
 2. 跑 `npm run build` 与 `npm run check`，确认基线可构建。
-3. 用 `git status`/文件时间确认没有未预期的外部改动（当前目录尚未初始化 git；建议先 `git init` 并提交基线，方便回滚）。
+3. 用 `git status`/文件时间确认没有未预期的外部改动。
 4. 向用户确认下一步任务，再动代码。
 
 ## 9. 常用排查
@@ -139,4 +149,4 @@ npm run check
 - 桌面窗口没出现：看 Host 控制台的 `[daimeow-helper]` 日志；确认 `~/.dsh/electron/electron.exe` 存在；确认插件已重载。
 - 页面没有“显示呆喵”：确认 Host 已重载（`GET /daimeow/detached/status` 应返回 `visible` 字段），并刷新页面。
 - 菜单/点击异常：检查 `pet-renderer.js` 的 `setIgnoreMouseEvents` 状态缓存与 `menu` 事件拦截；不要恢复“鼠标每动一次都发 IPC”的写法。
-- 动作不播：检查 `build-client.mjs` / `build-helper.mjs` 的运行时补丁是否全部命中（构建脚本会在补丁目标缺失时抛错）。
+- 动作不播：检查 `build-helper.mjs` 的运行时补丁是否全部命中（构建脚本会在补丁目标缺失时抛错）。

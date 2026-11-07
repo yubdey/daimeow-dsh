@@ -17,13 +17,13 @@
 - Live2D 模型贡献者：**污水滋养的藤蔓**
 - 贡献者 UID：`1683775819`
 - 部分新增动作素材贡献者：**van家11451419**（小黑盒 UID: 61071740）
-- 包含内容：`model/daimeow/` 下的 Live2D 模型、动作和贴图，以及 `src/renderer/pet/assets/` 下的桌宠道具贴图。
+- 包含内容：`assets/model/daimeow/` 下的 Live2D 模型、动作和贴图，以及 `assets/props/` 下的桌宠道具贴图。
 - 上述模型和素材由贡献者提供，不代表已自动采用本项目的 MIT License。再分发、修改或商用前，请确认贡献者或原权利人的授权范围。
 
 ## 《怪物猎人》相关权利
 
 呆喵是玩家自制的非官方粉丝作品，与 CAPCOM 无关联。《怪物猎人》、艾露猫及相关名称、角色和知识产权的权利归 CAPCOM 或其关联公司所有。
 
-## npm 依赖
+## 运行时
 
-项目使用的 Electron、PixiJS、`pixi-live2d-display`、esbuild、electron-builder 及其他 npm 依赖，分别适用其软件包内声明的许可证。发布或再分发前，请同时保留相应依赖附带的许可证和版权声明。
+桌面窗口使用单独安装的 Electron；Live2D 渲染由 Cubism Core 和 DaiMeow 打包运行时提供。发布或再分发前，请同时保留各组件的许可证和版权声明。
