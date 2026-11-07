@@ -2,8 +2,27 @@
   "name": "daimeow-dsh",
   "version": "1.0.0",
   "private": true,
-  "description": "DaiMeow Live2D desktop pet for DeepSeek Harness",
+  "description": "DaiMeow Monster Hunter Palico desktop pet plugin for DeepSeek Harness",
+  "author": "yubdey",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yubdey/daimeow-dsh.git"
+  },
+  "homepage": "https://github.com/yubdey/daimeow-dsh#readme",
+  "bugs": {
+    "url": "https://github.com/yubdey/daimeow-dsh/issues"
+  },
   "type": "module",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "desktop-pet",
+    "live2d"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -13,6 +32,7 @@
   },
   "files": [
     "index.js",
+    "screen-reply.js",
     "client.js",
     "cordis.patch.yml",
     "runtime/electron-helper",
@@ -34,9 +54,13 @@
       ]
     }
   },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-llm": "^0.2.0-rc.1"
+  },
   "scripts": {
     "build": "node scripts/build-client.mjs && node scripts/build-helper.mjs",
-    "check": "node --check index.js && node --check client.js && node --check runtime/electron-helper/main.js && node --check runtime/electron-helper/preload.js && node --check runtime/electron-helper/pet-renderer.js"
+    "check": "node --check index.js && node --check screen-reply.js && node --check client.js && node --check runtime/electron-helper/main.js && node --check runtime/electron-helper/preload.js && node --check runtime/electron-helper/pet-renderer.js",
+    "test": "node --test --test-isolation=none"
   },
   "license": "MIT"
 }

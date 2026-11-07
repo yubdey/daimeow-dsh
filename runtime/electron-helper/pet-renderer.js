@@ -76,6 +76,15 @@
   let suppressContextMenu = false;
   let lastPointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
+  function recoverInteraction(point) {
+    updateSettings({
+      clickThrough: false,
+      alwaysOnTop: true,
+    });
+    if (point) handleCursor(point);
+    updateHitTest();
+  }
+
   applyScale();
   applyOpacity();
   applyAlwaysOnTop();
@@ -118,6 +127,7 @@
   function applyPosition() {
     pet.style.left = String(position.x * window.innerWidth) + 'px';
     pet.style.top = String(position.y * window.innerHeight) + 'px';
+    updateHitTest();
   }
 
   function loadSettings() {
@@ -149,6 +159,7 @@
   function applyScale() {
     pet.style.width = Math.round(BASE_W * settings.scale) + 'px';
     pet.style.height = Math.round(BASE_H * settings.scale) + 'px';
+    updateHitTest();
   }
 
   function applyOpacity() {
@@ -283,14 +294,6 @@
   window.__DAIMEOW_MOTION_NAMES__ = buildMotionNameTable(MODEL_DOCUMENT);
 
   // ---- context menu ----
-  // 只在交互状态变化时发 IPC；菜单打开后鼠标每动一次都 setIgnoreMouseEvents(false)
-  // 会让窗口命中状态抖动，菜单里的点击被当成“点在外面”而关闭。
-  let interactiveState = null;
-  function setInteractive(interactive) {
-    if (interactiveState === interactive) return;
-    interactiveState = interactive;
-    window.petWindow?.setIgnoreMouseEvents(!interactive);
-  }
 
   function isInsidePet(point) {
     const rect = pet.getBoundingClientRect();
@@ -303,23 +306,37 @@
   }
 
   function updateHitTest() {
-    if (settings.clickThrough) {
-      setInteractive(false);
-      return;
+    const regions = [];
+    if (!settings.clickThrough) {
+      const petRect = pet.getBoundingClientRect();
+      if (petRect.width > 0 && petRect.height > 0) {
+        regions.push({
+          x: petRect.left,
+          y: petRect.top,
+          width: petRect.width,
+          height: petRect.height,
+        });
+      }
+      if (menuOpen) {
+        const menuRect = menu.getBoundingClientRect();
+        if (menuRect.width > 0 && menuRect.height > 0) {
+          regions.push({
+            x: menuRect.left - 4,
+            y: menuRect.top - 4,
+            width: menuRect.width + 8,
+            height: menuRect.height + 8,
+          });
+        }
+      }
     }
-    if (menuOpen) {
-      // 只有光标仍在菜单或呆喵上时才保持可交互；移到别处就恢复整层穿透。
-      const inMenu = isInsideRect(menu.getBoundingClientRect(), lastPointer, 4);
-      setInteractive(inMenu || isInsidePet(lastPointer));
-      return;
-    }
-    setInteractive(isInsidePet(lastPointer));
+    window.petWindow?.setHitRegions?.(regions);
   }
 
   function closeMenu() {
     if (!menuOpen) return;
     menuOpen = false;
     menu.classList.remove('open');
+    window.petWindow?.setInteractionLock?.(false);
     updateHitTest();
   }
 
@@ -491,13 +508,16 @@
     menu.appendChild(menuRow('关闭呆喵', {
       onClick: () => {
         closeMenu();
-        window.petWindow?.quit();
+        window.petWindow?.disablePlugin?.();
       },
     }));
 
     menuOpen = true;
     menu.classList.add('open');
     layoutMenu(point);
+    // 菜单打开期间整层保持可交互，避免光标从呆喵移向菜单时切回穿透，
+    // 导致菜单行收到 pointerdown 却收不到 click。
+    window.petWindow?.setInteractionLock?.(true);
     updateHitTest();
   }
 
@@ -519,14 +539,15 @@
     if (event.key === 'Escape') closeMenu();
   });
 
-  // ---- pointer: gaze + click-through ----
-  window.addEventListener('mousemove', (event) => {
-    lastPointer = { x: event.clientX, y: event.clientY };
+  // ---- pointer: gaze + menu dismissal ----
+  function handleCursor(point) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+    lastPointer = { x: point.x, y: point.y };
     const rect = stage.getBoundingClientRect();
     if (rect.width && rect.height) {
       api.__emitMouse({
-        relX: Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1)),
-        relY: Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1)),
+        relX: Math.max(-1, Math.min(1, ((point.x - rect.left) / rect.width) * 2 - 1)),
+        relY: Math.max(-1, Math.min(1, ((point.y - rect.top) / rect.height) * 2 - 1)),
       });
     }
     // 菜单打开时，光标离开菜单和呆喵就收起菜单，让全屏层恢复穿透，
@@ -537,8 +558,19 @@
       closeMenu();
       return;
     }
-    updateHitTest();
+  }
+
+  window.addEventListener('mousemove', (event) => {
+    handleCursor({ x: event.clientX, y: event.clientY });
   }, { passive: true });
+  window.petWindow?.onCursor?.((point) => handleCursor(point));
+  window.petWindow?.onWindowShown?.((point) => {
+    // 隐藏期间菜单状态可能还停在打开态；重新显示时先清掉，再由真实光标
+    // 位置和主进程命中区域恢复交互。
+    closeMenu();
+    if (point) handleCursor(point);
+    updateHitTest();
+  });
 
   window.addEventListener('wheel', () => {
     if (menuOpen
@@ -553,6 +585,24 @@
   // 不在 pet 上 setPointerCapture：运行时把点击反应的 pointerup 挂在 stage 上，
   // 捕获到祖先会让 pointerup 绕过 stage，点击就不播动作了。
   let drag = null;
+  let clickGesture = null;
+  stage.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    clickGesture = {
+      pointerId: event.pointerId,
+      startX: event.screenX,
+      startY: event.screenY,
+      startedAt: performance.now(),
+      moved: false,
+    };
+    window.petWindow?.setInteractionLock?.(true);
+  }, { capture: true });
+  stage.addEventListener('pointermove', (event) => {
+    if (!clickGesture || clickGesture.pointerId !== event.pointerId || clickGesture.moved) return;
+    if (Math.hypot(event.screenX - clickGesture.startX, event.screenY - clickGesture.startY) > 4) {
+      clickGesture.moved = true;
+    }
+  }, { capture: true });
   pet.addEventListener('pointerdown', (event) => {
     if (event.button !== 0 || settings.fixed) return;
     drag = {
@@ -579,14 +629,32 @@
     applyPosition();
   });
   window.addEventListener('pointerup', (event) => {
+    const gesture = clickGesture;
+    clickGesture = null;
+    // 菜单按钮的 click 在 pointerup 之后分发；菜单打开时保持交互锁。
+    if (event.button === 0 && !menuOpen) window.petWindow?.setInteractionLock?.(false);
+    if (gesture
+      && gesture.pointerId === event.pointerId
+      && !gesture.moved
+      && performance.now() - gesture.startedAt <= 500) {
+      void window.petWindow?.captureScreen?.();
+    }
     if (!drag || drag.pointerId !== event.pointerId) return;
     drag = null;
+    updateHitTest();
     savePosition();
   });
   window.addEventListener('pointercancel', (event) => {
+    if (clickGesture?.pointerId === event.pointerId) clickGesture = null;
+    if (!menuOpen) window.petWindow?.setInteractionLock?.(false);
     if (!drag || drag.pointerId !== event.pointerId) return;
     drag = null;
+    updateHitTest();
     savePosition();
+  });
+  window.addEventListener('resize', () => {
+    applyPosition();
+    updateHitTest();
   });
 
   // ---- boot ----
@@ -604,15 +672,14 @@
   api.__emitVisibility(true);
   api.__emitFps(45);
   api.__emitGamepadProbe(false);
-  window.petWindow?.setIgnoreMouseEvents(true);
   updateHitTest();
 
   // 托盘「恢复交互」：关闭鼠标穿透，避免开启穿透后无法再点开菜单。
-  window.petWindow?.onResetInteraction?.(() => {
-    updateSettings({ clickThrough: false });
+  window.petWindow?.onResetInteraction?.((point) => {
+    recoverInteraction(point);
   });
 
-  // ---- frames pushed by the host over stdin ----
+  // ---- frames forwarded by the helper main process ----
   window.petWindow?.onFrame?.((frame) => {
     if (!frame || typeof frame !== 'object') return;
     if (frame.type === 'daimeow/detached') return;
@@ -622,6 +689,10 @@
     }
     if (frame.action === 'show') {
       window.petWindow?.show();
+      return;
+    }
+    if (frame.action === 'reset_interaction') {
+      recoverInteraction(lastPointer);
       return;
     }
     if (frame.action === 'reset') {

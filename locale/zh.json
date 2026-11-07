@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "呆喵桌宠",
-    "description": "在 DeepSeek Harness 内置的 Live2D 呆喵，支持待机动作、点击互动、拖动、气泡台词、Agent 状态联动与桌宠设置。"
+    "description": "在 DeepSeek Harness 中运行的 Live2D 呆喵，支持点击互动、截图识图、待机动作、拖动、气泡台词和 Agent 状态联动。"
   }
 }
