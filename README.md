@@ -1,4 +1,4 @@
-# DaiMeow DSH
+# 呆喵 DSH（daimeow-dsh）
 
 DeepSeek Harness（DSH）桌面桌宠插件。它把
 [DaiMeow](https://github.com/yubdey/DaiMeow) 的 Live2D 模型、动作状态机、交互和
@@ -11,6 +11,62 @@ Agent 联动接入 DSH。
 - Live2D 呆喵显示在桌面而不是 DSH 页面内。
 - DSH 页面只保留一个在桌面呆喵隐藏时出现的“🐾 显示呆喵”入口。
 - 桌宠与 DSH 通过 stdout 状态回报、本机回环 HTTP 控制通道和本地路由通信。
+
+## 安装
+
+### 1. 确认 DSH Desktop 可用
+
+安装前请先确保 DeepSeek Harness Desktop 已安装并能正常启动。
+
+### 2. 准备 Electron 运行时
+
+呆喵 DSH 会启动一个独立的 Electron 桌面层。请先确认以下文件存在：
+
+```text
+%USERPROFILE%\.dsh\electron\electron.exe
+```
+
+如果不存在，可以选择：
+
+- 在 DSH 插件管理器中安装 `dsh-pet`，由它提供 Electron 运行时；
+- 或设置环境变量 `DSH_PET_ELECTRON_PATH`，指向本机可用的 `electron.exe`。
+
+### 3. 从 GitHub 安装插件
+
+1. 打开 DSH Desktop。
+2. 进入左侧的“插件”页面。
+3. 点击“添加插件”。
+4. 填写本仓库地址：
+
+   ```text
+   https://github.com/yubdey/daimeow-dsh.git
+   ```
+
+5. 确认安装。若 DSH 提示需要重启，请重启后再继续。
+6. 在“已安装插件”中找到“呆喵桌宠”，打开右侧开关。
+
+插件启用后会自动启动桌面 helper，主显示器上应出现 Live2D 呆喵。
+
+### 4. 检查识图功能
+
+左键点击呆喵会使用 DSH 当前配置的模型和 API Key 分析主屏截图，因此需要：
+
+- DSH 中已经配置可用的模型和凭据；
+- 当前模型支持图片输入；
+- DSH 附件服务可用。
+
+如果暂时不切换多模态模型，桌宠显示、动作、拖动和菜单仍可正常使用。
+
+### 本地目录安装
+
+开发时也可以先克隆仓库，再把本地绝对路径作为插件来源：
+
+```powershell
+git clone https://github.com/yubdey/daimeow-dsh.git
+```
+
+随后在 DSH 插件管理器中添加克隆后的 `daimeow-dsh` 目录。不要手工修改 DSH
+profile 的 `package.json` 或 `cordis.patch.yml`。
 
 ## 功能
 
@@ -192,24 +248,7 @@ Live2D 运行时只嵌入桌面 helper，不再重复放进 `client.js`。
 可用动作包括 `nod`、`happy`、`cheer`、`hello`、`thinking`、`idea`、`sit`、
 `stand_up`、`capture_screen` 等。
 
-## 安装与重载
-
-从 GitHub 安装时，可在 DSH 插件管理器的“添加插件”中填写仓库地址：
-
-```text
-https://github.com/yubdey/daimeow-dsh.git
-```
-
-也可以先克隆仓库，再把本地绝对路径作为插件来源：
-
-```powershell
-git clone https://github.com/yubdey/daimeow-dsh.git
-```
-
-插件安装、启用和停用应通过 DSH 插件管理界面完成，不要手工修改 profile 的
-`package.json` 或 `cordis.patch.yml`。
-
-开发修改后的重载方式：
+## 开发与重载
 
 | 修改内容 | 操作 |
 |---|---|

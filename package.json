@@ -2,7 +2,7 @@
   "name": "daimeow-dsh",
   "version": "1.0.0",
   "private": true,
-  "description": "DaiMeow Monster Hunter Palico desktop pet plugin for DeepSeek Harness",
+  "description": "呆喵：运行在 DeepSeek Harness 中的《怪物猎人》艾露猫 Live2D 桌面宠物插件",
   "author": "yubdey",
   "repository": {
     "type": "git",
