@@ -20,16 +20,27 @@ Agent 联动接入 DSH。
 
 ### 2. 准备 Electron 运行时
 
-呆喵 DSH 会启动一个独立的 Electron 桌面层。请先确认以下文件存在：
+呆喵 DSH 会启动一个独立的 Electron 桌面层，但**不需要安装 `dsh-pet`**。
+
+插件启用时会先检查以下位置：
 
 ```text
 %USERPROFILE%\.dsh\electron\electron.exe
 ```
 
-如果不存在，可以选择：
+如果不存在，插件会自动从 npmmirror 下载 Electron 43.3.0，解压到该目录后继续
+启动。首次启动只会下载一次，后续直接复用。下载进度会显示在 DSH 控制台，完整
+过程最长等待 10 分钟。
 
-- 在 DSH 插件管理器中安装 `dsh-pet`，由它提供 Electron 运行时；
-- 或设置环境变量 `DSH_PET_ELECTRON_PATH`，指向本机可用的 `electron.exe`。
+也可以手动指定已有运行时：
+
+- `DSH_DAIMEOW_ELECTRON_PATH`：推荐，指向现有的 `electron.exe`；
+- `DSH_PET_ELECTRON_PATH`：兼容旧配置；
+- `DSH_DAIMEOW_ELECTRON_VERSION`：覆盖自动下载的 Electron 版本；
+- `DSH_DAIMEOW_ELECTRON_MIRROR`：覆盖默认下载镜像。
+
+设置环境变量后需要重启 DSH。下载失败只影响桌面呆喵，重新点击“显示呆喵”会
+再次尝试下载。
 
 ### 3. 从 GitHub 安装插件
 
@@ -139,10 +150,11 @@ Host 不请求 DSH WebServer，因此不受浏览器访问闸门影响。
 ```text
 DaiMeow DSH/
 ├─ index.js                       Host 插件、工具、路由、helper 生命周期
+├─ electron-runtime.js            Electron 自动下载、解压和路径解析
 ├─ src/client.template.js         DSH 页面轻量启动器源码
 ├─ client.js                      轻量启动器构建产物，不直接编辑
 ├─ screen-reply.js                截图回复人格、25 字解析和 payload 校验
-├─ test/screen-reply.test.js      截图回复纯逻辑测试
+├─ test/                          截图回复和 Electron 运行时测试
 ├─ scripts/
 │  ├─ build-client.mjs            构建 DSH 页面启动器
 │  └─ build-helper.mjs            构建 helper 的模型与运行时资源
@@ -169,13 +181,16 @@ DaiMeow DSH/
 ## 环境要求
 
 - 已安装并可运行的 DSH Desktop。
-- 独立 Electron 运行时，按以下顺序解析：
-  1. 环境变量 `DSH_PET_ELECTRON_PATH`
-  2. `%USERPROFILE%\.dsh\electron\electron.exe`
+- 首次启用桌面呆喵时需要联网下载 Electron；之后使用本地缓存。
+- Electron 按以下顺序解析：
+  1. 环境变量 `DSH_DAIMEOW_ELECTRON_PATH`
+  2. 环境变量 `DSH_PET_ELECTRON_PATH`
+  3. `%USERPROFILE%\.dsh\electron\electron.exe`
 
-若第二项不存在，可设置环境变量，或安装提供该运行时的 `dsh-pet`。
+都不存在时，插件会通过 `@electron/get` 自动下载并解压。
 
-插件本身不需要安装 npm 依赖；Node.js 只用于构建和语法检查。
+`@electron/get` 和 `@electron-internal/extract-zip` 由 DSH 插件管理器随插件
+自动安装；仓库中已经包含构建产物，普通安装用户不需要手动运行 npm。
 
 ## 构建
 
@@ -262,6 +277,7 @@ Live2D 运行时只嵌入桌面 helper，不再重复放进 `client.js`。
 
 - 仅覆盖主显示器；多显示器尚未支持。
 - 覆盖范围是主显示器 `workArea`，不覆盖任务栏。
+- 首次启用需要联网完成一次 Electron 下载，约 347 MiB 解压体积。
 - helper 崩溃后不会自动重启；DSH 页面入口在 helper 关闭时也可能隐藏。
 - “显示呆喵”状态通常在一个 1.5 秒轮询周期内更新；页面在后台被 Chromium
   节流时，切回 DSH 会立即刷新。
@@ -278,10 +294,12 @@ Live2D 运行时只嵌入桌面 helper，不再重复放进 `client.js`。
 
 ### 桌面窗口没有出现
 
-1. 确认 `%USERPROFILE%\.dsh\electron\electron.exe` 存在，或设置
-   `DSH_PET_ELECTRON_PATH`。
-2. 停用并重新启用插件。
-3. 检查 Host 控制台中的 `[daimeow-helper]` 日志。
+1. 检查 Host 控制台中的 `[daimeow-electron]` 下载进度和错误。
+2. 确认网络可访问 npmmirror，或设置 `DSH_DAIMEOW_ELECTRON_MIRROR`。
+3. 确认 `%USERPROFILE%\.dsh\electron\electron.exe` 已解压完成，或设置
+   `DSH_DAIMEOW_ELECTRON_PATH` 指向已有 Electron。
+4. 停用并重新启用插件，或点击“显示呆喵”重试。
+5. 检查 `[daimeow-helper]` 日志排查桌宠窗口自身的问题。
 
 ### DSH 页面没有恢复入口
 

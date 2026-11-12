@@ -26,4 +26,6 @@
 
 ## 运行时
 
-桌面窗口使用单独安装的 Electron；Live2D 渲染由 Cubism Core 和 DaiMeow 打包运行时提供。发布或再分发前，请同时保留各组件的许可证和版权声明。
+桌面窗口使用首次运行时自动下载的 Electron；Live2D 渲染由 Cubism Core 和
+DaiMeow 打包运行时提供。Electron 下载包内包含 `LICENSE` 和
+`LICENSES.chromium.html`，发布或再分发前请保留相应许可证和版权声明。

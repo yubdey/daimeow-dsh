@@ -17,10 +17,11 @@
 ```
 DaiMeow DSH/
 ├─ index.js                     # Host（Cordis 插件，跑在 DSH Host 子 Node 进程）
+├─ electron-runtime.js          # Electron 路径探测、自动下载和解压
 ├─ src/client.template.js       # DSH 页面轻量启动器源码
 ├─ client.js                    # 构建产物（由启动器模板复制生成，不要手改）
 ├─ screen-reply.js              # 截图回复人格、25 字解析、payload 校验
-├─ test/screen-reply.test.js    # 截屏回复纯逻辑测试
+├─ test/                        # 截屏回复和 Electron 运行时纯逻辑测试
 ├─ scripts/build-client.mjs     # 生成轻量 client.js
 ├─ scripts/build-helper.mjs     # 生成 helper 的 assets.js / runtime.js
 ├─ runtime/
@@ -50,6 +51,7 @@ DaiMeow DSH/
 - `inject = ['tools', 'webServer', 'llm', 'agentDefaultModel']`。
 - `DaiMeowService`：向 SSE 客户端广播 `daimeow/reaction` 帧；`service.onFrame` 通过 helper 上报的本机回环 HTTP 控制地址下发帧。
 - 左键截屏识图：helper 将 480×270 JPEG 写入 stdout；Host 存入 DSH 附件服务，用 `ctx.llm.stream()` 调当前多模态模型，再把动作和台词回传呆喵。人格固定为原 DaiMeow 的“元气随从喵”，台词硬截断到 25 字；模型支持时默认传 `reasoningEffort: off`，内置 5 秒冷却。
+- Electron 运行时：不需要安装 `dsh-pet`。依次检查 `DSH_DAIMEOW_ELECTRON_PATH`、兼容变量 `DSH_PET_ELECTRON_PATH`、`$DSH_HOME/electron`；都没有时用 `@electron/get` 从 npmmirror 下载、`extract-zip` 解压，并在下次启动复用。
 - 路由：
   - `GET /daimeow/events`：SSE。
   - `POST /daimeow/detached/open`：spawn helper。
@@ -63,7 +65,7 @@ DaiMeow DSH/
   - `POST /daimeow/detached/capture`：触发一次截屏识图（同样受 5 秒冷却）。
 - 配置：`autoReactions`（默认 true）、`reactionThrottleMs`（默认 1200）、`desktop`（默认 true，启用时自动拉起 helper）。
 - 工具：`pet_say`、`pet_control`、`pet_status`；`pet_control` 额外支持 `capture_screen`。
-- Electron 可执行文件解析顺序：`DSH_PET_ELECTRON_PATH` → `~/.dsh/electron/electron.exe`（通常由 dsh-pet 下载）。
+- Electron 可执行文件解析顺序：`DSH_DAIMEOW_ELECTRON_PATH` → `DSH_PET_ELECTRON_PATH` → `~/.dsh/electron/electron.exe` → 自动下载。
 
 ### 桌面 helper（`runtime/electron-helper/`）
 
@@ -130,7 +132,7 @@ npm test
 - “显示呆喵”入口依赖 helper 可见性上报；页面通常在一个 1.5 秒轮询周期内更新，重新聚焦或重新可见时会立即刷新。改动 Host/helper 后仍需停用/启用插件。
 - 仅覆盖主显示器；多屏未处理。
 - helper 异常退出时会尝试同步停用插件，避免出现“程序已退出、插件仍开启”的状态；不会自动重启。
-- 依赖 dsh-pet 下载的 `~/.dsh/electron`；如果该目录不存在，需要设置 `DSH_PET_ELECTRON_PATH` 或补 `@electron/get` 自动下载。
+- Electron 首次启用时自动下载到 `~/.dsh/electron`；下载失败时可设置 `DSH_DAIMEOW_ELECTRON_PATH`，或配置镜像后重试。
 - 右键菜单打开后光标离开菜单/呆喵会自动收起（为了让全屏层恢复穿透、滚轮能操作其他程序）。
 - 截图会发送给 DSH 当前选择的多模态模型；模型必须支持图片输入。
 - 截图会写入 DSH 附件服务，实际保留和回收策略由 DSH 附件存储决定。
@@ -146,7 +148,7 @@ npm test
 
 ## 9. 常用排查
 
-- 桌面窗口没出现：看 Host 控制台的 `[daimeow-helper]` 日志；确认 `~/.dsh/electron/electron.exe` 存在；确认插件已重载。
+- 桌面窗口没出现：先看 `[daimeow-electron]` 下载日志，再检查 `[daimeow-helper]`；确认 `~/.dsh/electron/electron.exe` 存在或由环境变量指定；确认插件已重载。
 - 页面没有“显示呆喵”：确认 Host 已重载（`GET /daimeow/detached/status` 应返回 `visible` 字段），并刷新页面。
 - 菜单/点击异常：检查 `pet-renderer.js` 的 `setIgnoreMouseEvents` 状态缓存与 `menu` 事件拦截；不要恢复“鼠标每动一次都发 IPC”的写法。
 - 动作不播：检查 `build-helper.mjs` 的运行时补丁是否全部命中（构建脚本会在补丁目标缺失时抛错）。

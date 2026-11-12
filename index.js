@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { downloadArtifact } from '@electron/get';
 import {
   BlockAssembler,
   ReasoningEffortId,
@@ -16,6 +16,10 @@ import {
   parseScreenReply,
   screenErrorText,
 } from './screen-reply.js';
+import {
+  ensureElectronRuntime,
+  findExistingElectron,
+} from './electron-runtime.js';
 
 function sendJson(res, status, value) {
   const body = JSON.stringify(value);
@@ -248,6 +252,17 @@ function apply(ctx, config = {}) {
   let screenReasoningOff = null;
   let helperStartPromise = null;
   let helperStopPromise = null;
+  let electronEnsurePromise = null;
+  let electronRuntimeState = {
+    state: 'idle',
+    path: '',
+    version: '',
+    mirror: '',
+    existing: false,
+    transferred: 0,
+    total: 0,
+    error: '',
+  };
   let pluginLifecycleDisposing = false;
   const expectedChildExits = new WeakSet();
   const screenHistory = [];
@@ -255,22 +270,36 @@ function apply(ctx, config = {}) {
   const helperMain = join(pluginRoot, 'runtime', 'electron-helper', 'main.js');
 
   function resolveElectronExe() {
-    const candidates = [];
-    if (process.env.DSH_PET_ELECTRON_PATH) candidates.push(process.env.DSH_PET_ELECTRON_PATH);
-    const home = process.env.USERPROFILE || process.env.HOME || '';
-    const relative = process.platform === 'win32'
-      ? 'electron.exe'
-      : process.platform === 'darwin'
-        ? join('Electron.app', 'Contents', 'MacOS', 'Electron')
-        : 'electron';
-    if (home) candidates.push(join(home, '.dsh', 'electron', relative));
-    return candidates.find((candidate) => {
-      try {
-        return existsSync(candidate);
-      } catch {
-        return false;
-      }
+    return findExistingElectron();
+  }
+
+  async function ensureElectronExe() {
+    const existing = resolveElectronExe();
+    if (existing) {
+      electronRuntimeState = {
+        ...electronRuntimeState,
+        state: 'ready',
+        path: existing,
+        existing: true,
+        error: '',
+      };
+      return { ok: true, path: existing, existing: true };
+    }
+    if (electronEnsurePromise) return electronEnsurePromise;
+    electronEnsurePromise = (async () => {
+      const { default: extract } = await import('@electron-internal/extract-zip');
+      return ensureElectronRuntime({
+        downloadArtifact,
+        extract,
+        onState(state) {
+          electronRuntimeState = state;
+        },
+        logger: console,
+      });
+    })().finally(() => {
+      electronEnsurePromise = null;
     });
+    return electronEnsurePromise;
   }
 
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -589,14 +618,15 @@ function apply(ctx, config = {}) {
     if (detachedChild) return { ok: true, reused: true };
 
     const starting = (async () => {
-      const exe = resolveElectronExe();
-      if (!exe) {
+      const runtime = await ensureElectronExe();
+      if (!runtime.ok) {
         return {
           ok: false,
           status: 503,
-          error: '未找到 Electron 运行时：请设置 DSH_PET_ELECTRON_PATH，或安装 dsh-pet 以复用 ~/.dsh/electron/electron.exe',
+          error: `Electron 运行时不可用：${runtime.error}`,
         };
       }
+      const exe = runtime.path;
     try {
       const env = { ...process.env };
       delete env.ELECTRON_RUN_AS_NODE;
@@ -751,6 +781,7 @@ function apply(ctx, config = {}) {
         open: !!detachedChild,
         visible: desktopVisible,
         controlReady: !!desktopControlUrl,
+        electronRuntime: electronRuntimeState,
         disableTransport: 'dsh-client-remote',
         disableRequestPending: !!pendingClientDisable,
         disableRequest: pendingClientDisable

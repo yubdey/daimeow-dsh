@@ -1,6 +1,6 @@
 {
   "name": "daimeow-dsh",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "呆喵：运行在 DeepSeek Harness 中的《怪物猎人》艾露猫 Live2D 桌面宠物插件",
   "author": "yubdey",
@@ -32,6 +32,7 @@
   },
   "files": [
     "index.js",
+    "electron-runtime.js",
     "screen-reply.js",
     "client.js",
     "cordis.patch.yml",
@@ -57,9 +58,13 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-llm": "^0.2.0-rc.1"
   },
+  "dependencies": {
+    "@electron-internal/extract-zip": "^1.0.5",
+    "@electron/get": "^5.1.0"
+  },
   "scripts": {
     "build": "node scripts/build-client.mjs && node scripts/build-helper.mjs",
-    "check": "node --check index.js && node --check screen-reply.js && node --check client.js && node --check runtime/electron-helper/main.js && node --check runtime/electron-helper/preload.js && node --check runtime/electron-helper/pet-renderer.js",
+    "check": "node --check index.js && node --check electron-runtime.js && node --check screen-reply.js && node --check client.js && node --check runtime/electron-helper/main.js && node --check runtime/electron-helper/preload.js && node --check runtime/electron-helper/pet-renderer.js",
     "test": "node --test --test-isolation=none"
   },
   "license": "MIT"
