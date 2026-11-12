@@ -14,35 +14,7 @@ Agent 联动接入 DSH。
 
 ## 安装
 
-### 1. 确认 DSH Desktop 可用
-
-安装前请先确保 DeepSeek Harness Desktop 已安装并能正常启动。
-
-### 2. 准备 Electron 运行时
-
-呆喵 DSH 会启动一个独立的 Electron 桌面层，但**不需要安装 `dsh-pet`**。
-
-插件启用时会先检查以下位置：
-
-```text
-%USERPROFILE%\.dsh\electron\electron.exe
-```
-
-如果不存在，插件会自动从 npmmirror 下载 Electron 43.3.0，解压到该目录后继续
-启动。首次启动只会下载一次，后续直接复用。下载进度会显示在 DSH 控制台，完整
-过程最长等待 10 分钟。
-
-也可以手动指定已有运行时：
-
-- `DSH_DAIMEOW_ELECTRON_PATH`：推荐，指向现有的 `electron.exe`；
-- `DSH_PET_ELECTRON_PATH`：兼容旧配置；
-- `DSH_DAIMEOW_ELECTRON_VERSION`：覆盖自动下载的 Electron 版本；
-- `DSH_DAIMEOW_ELECTRON_MIRROR`：覆盖默认下载镜像。
-
-设置环境变量后需要重启 DSH。下载失败只影响桌面呆喵，重新点击“显示呆喵”会
-再次尝试下载。
-
-### 3. 从 GitHub 安装插件
+### 从 GitHub 安装
 
 1. 打开 DSH Desktop。
 2. 进入左侧的“插件”页面。
@@ -58,7 +30,10 @@ Agent 联动接入 DSH。
 
 插件启用后会自动启动桌面 helper，主显示器上应出现 Live2D 呆喵。
 
-### 4. 检查识图功能
+> 首次启用时如果本机没有 Electron，插件会自动下载并复用它，不需要安装
+> `dsh-pet`。下载仅发生在第一次启用时。
+
+### 检查识图功能
 
 左键点击呆喵会使用 DSH 当前配置的模型和 API Key 分析主屏截图，因此需要：
 
@@ -191,6 +166,18 @@ DaiMeow DSH/
 
 `@electron/get` 和 `@electron-internal/extract-zip` 由 DSH 插件管理器随插件
 自动安装；仓库中已经包含构建产物，普通安装用户不需要手动运行 npm。
+
+### Electron 运行时高级配置
+
+普通用户不需要配置这一节。只有无法自动下载、需要离线运行或希望复用其他
+Electron 安装时才需要设置：
+
+- `DSH_DAIMEOW_ELECTRON_PATH`：指向现有的 `electron.exe`；
+- `DSH_PET_ELECTRON_PATH`：兼容旧配置的运行时路径；
+- `DSH_DAIMEOW_ELECTRON_VERSION`：覆盖自动下载的版本，默认 `43.3.0`；
+- `DSH_DAIMEOW_ELECTRON_MIRROR`：覆盖默认的 npmmirror 下载镜像。
+
+设置环境变量后需要重启 DSH。下载进度和错误信息会显示在 DSH 控制台。
 
 ## 构建
 
